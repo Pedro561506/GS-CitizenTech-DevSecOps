@@ -25,12 +25,25 @@ pipeline {
                 '''
             }
         }
+
+        stage('Analise SonarQube') {
+            steps {
+                script {
+                    def scannerHome = tool 'SonarScanner'
+
+                    withSonarQubeEnv('SonarQube') {
+                        sh "${scannerHome}/bin/sonar-scanner"
+                    }
+                }
+            }
+        }
     }
 
     post {
         success {
-            echo 'Pipeline inicial executada com sucesso!'
+            echo 'Pipeline e analise SonarQube executadas com sucesso!'
         }
+
         failure {
             echo 'Falha na pipeline. Consulte os logs.'
         }
