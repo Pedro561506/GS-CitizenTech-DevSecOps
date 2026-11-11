@@ -1,4 +1,5 @@
 
+
 pipeline {
     agent any
 
@@ -134,20 +135,17 @@ if quality_gate != "OK":
     raise SystemExit(
         "BLOQUEADO: Quality Gate reprovado."
     )
-   
-stage('Docker Build') {
-    steps {
-        sh '''
-            docker build -t "citizentech-api:$BUILD_NUMBER" .
-        '''
-    }
-}
-
 
 print("Quality Gate aprovado!")
 PY
                     '''
                 }
+            }
+        }
+
+        stage('Docker Build') {
+            steps {
+                sh 'docker build -t citizentech-api:$BUILD_NUMBER .'
             }
         }
     }
