@@ -160,3 +160,45 @@ PY
         }
     }
 }
+
+stage('Analise Trivy') {
+    steps {
+        sh '''
+            docker run --rm \
+              -v /var/run/docker.sock:/var/run/docker.sock \
+              -v trivy_cache:/root/.cache/ \
+              aquasec/trivy:latest image \
+              --scanners vuln \
+              --severity HIGH,CRITICAL \
+              --format json \
+              "citizentech-api:$BUILD_NUMBER" > trivy-report.json
+
+            docker run --rm \
+              -v /var/run/docker.sock:/var/run/docker.sock \
+              -v trivy_cache:/root/.cache/ \
+              aquasec/trivy:latest image \
+              --scanners vuln \
+              --severity HIGH,CRITICAL \
+              --format table \
+              "citizentech-api:$BUILD_NUMBER"
+
+            docker run --rm \
+              -v /var/run/docker.sock:/var/run/docker.sock \
+              -v trivy_cache:/root/.cache/ \
+              aquasec/trivy:latest image \
+              --scanners vuln \
+              --severity CRITICAL \
+              --exit-code 1 \
+              "citizentech-api:$BUILD_NUMBER"
+        '''
+    }
+
+    post {
+        always {
+            archiveArtifacts(
+                artifacts: 'trivy-report.json',
+                allowEmptyArchive: true
+            )
+        }
+    }
+}
