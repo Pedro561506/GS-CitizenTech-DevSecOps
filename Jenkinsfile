@@ -1,9 +1,14 @@
 
-
 pipeline {
     agent any
 
+    options {
+        disableConcurrentBuilds()
+        timestamps()
+    }
+
     stages {
+
         stage('Checkout') {
             steps {
                 echo 'Obtendo codigo do GitHub...'
@@ -14,6 +19,7 @@ pipeline {
         stage('Verificar ambiente') {
             steps {
                 sh 'python3 --version'
+                sh 'docker --version'
             }
         }
 
@@ -148,57 +154,69 @@ PY
                 sh 'docker build -t citizentech-api:$BUILD_NUMBER .'
             }
         }
+
+        stage('Analise Trivy') {
+            steps {
+                sh '''
+                    echo "Iniciando analise de seguranca Trivy..."
+
+                    docker run --rm \
+                      -v /var/run/docker.sock:/var/run/docker.sock \
+                      -v trivy_cache:/root/.cache/ \
+                      aquasec/trivy:latest image \
+                      --scanners vuln \
+                      --severity HIGH,CRITICAL \
+                      --format json \
+                      "citizentech-api:$BUILD_NUMBER" > trivy-report.json
+
+                    echo "Relatorio JSON gerado."
+
+                    docker run --rm \
+                      -v /var/run/docker.sock:/var/run/docker.sock \
+                      -v trivy_cache:/root/.cache/ \
+                      aquasec/trivy:latest image \
+                      --scanners vuln \
+                      --severity HIGH,CRITICAL \
+                      --format table \
+                      "citizentech-api:$BUILD_NUMBER"
+
+                    echo "Verificando vulnerabilidades CRITICAL..."
+
+                    docker run --rm \
+                      -v /var/run/docker.sock:/var/run/docker.sock \
+                      -v trivy_cache:/root/.cache/ \
+                      aquasec/trivy:latest image \
+                      --scanners vuln \
+                      --severity CRITICAL \
+                      --exit-code 1 \
+                      "citizentech-api:$BUILD_NUMBER"
+
+                    echo "Analise Trivy concluida sem vulnerabilidades CRITICAL."
+                '''
+            }
+
+            post {
+                always {
+                    archiveArtifacts(
+                        artifacts: 'trivy-report.json',
+                        allowEmptyArchive: true
+                    )
+                }
+            }
+        }
     }
 
     post {
         success {
-            echo 'Pipeline aprovada!'
+            echo 'Pipeline DevSecOps aprovada!'
         }
 
         failure {
-            echo 'Pipeline bloqueada ou com erro.'
+            echo 'Pipeline bloqueada ou com erro. Consulte os logs.'
         }
-    }
-}
 
-stage('Analise Trivy') {
-    steps {
-        sh '''
-            docker run --rm \
-              -v /var/run/docker.sock:/var/run/docker.sock \
-              -v trivy_cache:/root/.cache/ \
-              aquasec/trivy:latest image \
-              --scanners vuln \
-              --severity HIGH,CRITICAL \
-              --format json \
-              "citizentech-api:$BUILD_NUMBER" > trivy-report.json
-
-            docker run --rm \
-              -v /var/run/docker.sock:/var/run/docker.sock \
-              -v trivy_cache:/root/.cache/ \
-              aquasec/trivy:latest image \
-              --scanners vuln \
-              --severity HIGH,CRITICAL \
-              --format table \
-              "citizentech-api:$BUILD_NUMBER"
-
-            docker run --rm \
-              -v /var/run/docker.sock:/var/run/docker.sock \
-              -v trivy_cache:/root/.cache/ \
-              aquasec/trivy:latest image \
-              --scanners vuln \
-              --severity CRITICAL \
-              --exit-code 1 \
-              "citizentech-api:$BUILD_NUMBER"
-        '''
-    }
-
-    post {
         always {
-            archiveArtifacts(
-                artifacts: 'trivy-report.json',
-                allowEmptyArchive: true
-            )
+            echo 'Execucao finalizada.'
         }
     }
 }
