@@ -85,13 +85,13 @@ if not ce_task_id:
 token = os.environ["SONAR_TOKEN"]
 
 def consultar(caminho):
-    url = server + caminho
     request = urllib.request.Request(
-        url,
+        server + caminho,
         headers={
             "Authorization": "Bearer " + token
         }
     )
+
     with urllib.request.urlopen(
         request, timeout=15
     ) as response:
@@ -158,6 +158,8 @@ PY
         stage('Analise Trivy') {
             steps {
                 sh '''
+                    set -eu
+
                     echo "Iniciando analise de seguranca Trivy..."
 
                     docker run --rm \
@@ -191,7 +193,7 @@ PY
                       --exit-code 1 \
                       "citizentech-api:$BUILD_NUMBER"
 
-                    echo "Analise Trivy concluida sem vulnerabilidades CRITICAL."
+                    echo "Trivy: nenhuma vulnerabilidade CRITICAL detectada."
                 '''
             }
 
@@ -201,6 +203,44 @@ PY
                         artifacts: 'trivy-report.json',
                         allowEmptyArchive: true
                     )
+                }
+            }
+        }
+
+        stage('Publicar Docker Hub') {
+            steps {
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'dockerhub-credentials',
+                        usernameVariable: 'DOCKER_USER',
+                        passwordVariable: 'DOCKER_TOKEN'
+                    )
+                ]) {
+                    sh '''
+                        set -eu
+
+                        export DOCKER_CONFIG="$(mktemp -d)"
+                        trap 'docker logout >/dev/null 2>&1 || true; rm -rf "$DOCKER_CONFIG"' EXIT
+
+                        echo "Autenticando no Docker Hub..."
+
+                        printf '%s' "$DOCKER_TOKEN" | docker login \
+                            --username "$DOCKER_USER" \
+                            --password-stdin
+
+                        echo "Preparando imagem versionada..."
+
+                        docker tag \
+                            "citizentech-api:$BUILD_NUMBER" \
+                            "rm561506/citizentech-api:$BUILD_NUMBER"
+
+                        echo "Publicando imagem no Docker Hub..."
+
+                        docker push \
+                            "rm561506/citizentech-api:$BUILD_NUMBER"
+
+                        echo "Imagem publicada com sucesso!"
+                    '''
                 }
             }
         }
