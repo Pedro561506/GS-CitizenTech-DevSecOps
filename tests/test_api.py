@@ -18,3 +18,7 @@ def test_ocorrencias():
     assert response.status_code == 200
     assert response.json()["total"] == 2
     assert len(response.json()["dados"]) == 2
+
+    def test_falha_controlada():
+    """Teste temporario para demonstrar o bloqueio da pipeline."""
+    assert 1 == 2
