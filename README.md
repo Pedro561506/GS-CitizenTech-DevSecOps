@@ -95,4 +95,4 @@ GitHub → Jenkins → Testes → SonarQube → Quality Gate → Docker Build �
 
 Projeto acadêmico desenvolvido com referência ao CivicLens. Caso código do projeto original seja reutilizado, serão preservados os avisos de copyright e os termos da licença MIT correspondentes.
 
-Pipeline CI/CD com Jenkins e verificacao automatica de alteracoes no GitHub.
+A pipeline DevSecOps utiliza Jenkins SCM Polling para detectar automaticamente novos commits no GitHub.
