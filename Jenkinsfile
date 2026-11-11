@@ -134,15 +134,15 @@ if quality_gate != "OK":
     raise SystemExit(
         "BLOQUEADO: Quality Gate reprovado."
     )
-    stage('Docker Build') {
+   
+stage('Docker Build') {
     steps {
         sh '''
-            docker build \
-                -t citizentech-api:${BUILD_NUMBER} \
-                -t citizentech-api:latest .
+            docker build -t "citizentech-api:$BUILD_NUMBER" .
         '''
     }
 }
+
 
 print("Quality Gate aprovado!")
 PY
