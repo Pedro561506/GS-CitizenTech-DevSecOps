@@ -1,0 +1,27 @@
+
+services:
+  citizentech:
+    image: rm561506/citizentech-api:${IMAGE_TAG:-12}
+    container_name: citizentech-deploy
+    restart: unless-stopped
+
+    ports:
+      - "127.0.0.1:8001:8000"
+
+    networks:
+      - devsecops-net
+
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=5)"
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+networks:
+  devsecops-net:
+    external: true
