@@ -160,7 +160,7 @@ PY
                 sh '''
                     set -eu
 
-                    echo "Iniciando analise de seguranca Trivy..."
+                    echo "Iniciando analise Trivy..."
 
                     docker run --rm \
                       -v /var/run/docker.sock:/var/run/docker.sock \
@@ -170,8 +170,6 @@ PY
                       --severity HIGH,CRITICAL \
                       --format json \
                       "citizentech-api:$BUILD_NUMBER" > trivy-report.json
-
-                    echo "Relatorio JSON gerado."
 
                     docker run --rm \
                       -v /var/run/docker.sock:/var/run/docker.sock \
@@ -193,7 +191,7 @@ PY
                       --exit-code 1 \
                       "citizentech-api:$BUILD_NUMBER"
 
-                    echo "Trivy: nenhuma vulnerabilidade CRITICAL detectada."
+                    echo "Trivy: verificacao CRITICAL aprovada."
                 '''
             }
 
@@ -222,33 +220,99 @@ PY
                         export DOCKER_CONFIG="$(mktemp -d)"
                         trap 'docker logout >/dev/null 2>&1 || true; rm -rf "$DOCKER_CONFIG"' EXIT
 
-                        echo "Autenticando no Docker Hub..."
-
                         printf '%s' "$DOCKER_TOKEN" | docker login \
-                            --username "$DOCKER_USER" \
-                            --password-stdin
-
-                        echo "Preparando imagem versionada..."
+                          --username "$DOCKER_USER" \
+                          --password-stdin
 
                         docker tag \
-                            "citizentech-api:$BUILD_NUMBER" \
-                            "rm561506/citizentech-api:$BUILD_NUMBER"
-
-                        echo "Publicando imagem no Docker Hub..."
+                          "citizentech-api:$BUILD_NUMBER" \
+                          "rm561506/citizentech-api:$BUILD_NUMBER"
 
                         docker push \
-                            "rm561506/citizentech-api:$BUILD_NUMBER"
+                          "rm561506/citizentech-api:$BUILD_NUMBER"
 
-                        echo "Imagem publicada com sucesso!"
+                        echo "Imagem publicada no Docker Hub!"
                     '''
                 }
+            }
+        }
+
+        stage('Deploy Docker Compose') {
+            steps {
+                sh '''
+                    set -eu
+
+                    echo "Iniciando deploy automatizado..."
+
+                    docker run --rm -i \
+                      -v /var/run/docker.sock:/var/run/docker.sock \
+                      -e IMAGE_TAG="$BUILD_NUMBER" \
+                      docker:cli \
+                      compose -p gs-citizentech-devsecops \
+                      -f - up -d --pull always \
+                      < docker-compose.yml
+
+                    echo "Deploy Docker Compose executado!"
+                '''
+            }
+        }
+
+        stage('Validacao HTTP') {
+            steps {
+                sh '''
+                    python3 - <<'PY'
+import json
+import time
+import urllib.request
+
+base = "http://citizentech-deploy:8000"
+
+def consultar(endpoint):
+    with urllib.request.urlopen(
+        base + endpoint,
+        timeout=5
+    ) as response:
+        if response.status != 200:
+            raise RuntimeError(
+                "HTTP inesperado: " + str(response.status)
+            )
+        return json.load(response)
+
+print("Aguardando a aplicacao ficar disponivel...")
+
+for tentativa in range(12):
+    try:
+        health = consultar("/health")
+
+        if health.get("status") != "ok":
+            raise RuntimeError("Health check invalido")
+
+        print("HEALTH CHECK: OK")
+        break
+    except Exception as erro:
+        print("Tentativa:", tentativa + 1, erro)
+        time.sleep(5)
+else:
+    raise SystemExit("ERRO: aplicacao indisponivel")
+
+ocorrencias = consultar("/ocorrencias")
+
+if "total" not in ocorrencias:
+    raise SystemExit(
+        "ERRO: resposta de ocorrencias invalida"
+    )
+
+print("OCORRENCIAS:", ocorrencias["total"])
+print("VALIDACAO HTTP: SUCCESS")
+PY
+                '''
             }
         }
     }
 
     post {
         success {
-            echo 'Pipeline DevSecOps aprovada!'
+            echo 'Pipeline DevSecOps concluida com sucesso!'
         }
 
         failure {
